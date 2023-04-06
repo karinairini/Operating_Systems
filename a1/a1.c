@@ -22,7 +22,8 @@ void transformPermissions(char *permissions, char *octalPermission)
 			binaryPermission[i] = '0';
 		}
 	}
-	unsigned long decimal_num = strtoul(binaryPermission, NULL, 2);
+	//am cautat pe internet aceasta functie pentru a converti sirul in numarul binar potrivit
+	unsigned long decimal_num = strtoul(binaryPermission, NULL, 2); 
 	sprintf(octalPermission, "%lo", decimal_num);
 }
 
@@ -105,7 +106,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 	int headerSize = 0, version = 0, nbOfSections = 0;
 	read(fd1, magic, 1);
 	magic[1]='\0';
-	if(magic[0] != 'L')
+	if(strncmp(magic, "L", 1) != 0)
 	{
 		if(parse_command == true)
 		{
@@ -204,6 +205,44 @@ void extractSF(const char *path, int section, int line)
 		printf("ERROR\ninvalid section\n");
 		return;
 	}
+	int startSection = sectionsOffsets[section - 1];
+	int endSection = sectionsSizes[section - 1];
+	int numberOfLines = 0;
+	lseek(fd1, startSection, SEEK_SET);
+	for(int i = 0; i < endSection; i++)
+	{
+		char c = 0;
+		read(fd1, &c, 1);
+		if(c == '\n')
+		{
+			numberOfLines++;
+		}
+	}
+	numberOfLines++;
+	if(numberOfLines < line)
+	{
+		printf("ERROR\ninvalid line\n");
+		return;
+	}
+	printf("SUCCESS\n");
+	char lines[20][100000];
+	lseek(fd1, startSection, SEEK_SET);
+	int i = 0, j = 0;
+	while(i < numberOfLines)
+	{
+		read(fd1, &lines[i][j], 1);
+		if(lines[i][j] == '\n')
+		{
+			lines[i][j] = '\0';
+			i++;
+			j = 0;
+		}
+		else
+		{
+			j++;
+		}
+	}
+	printf("%s\n", lines[numberOfLines - line]);
 	close(fd1);
 }
 
