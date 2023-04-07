@@ -35,7 +35,7 @@ void listDir(const char *path, int recursive, char *permissions, int size_greate
 	dir = opendir(path);
 	if(dir == NULL)
 	{
-		printf("Could not open directory!");
+		perror("Could not open directory!");
 		return;
 	}
 	while((entry = readdir(dir)) != NULL)
@@ -80,7 +80,9 @@ void listDir(const char *path, int recursive, char *permissions, int size_greate
 		 				if(recursive == 1)
 		 				{
 		 					if(S_ISDIR(statbuf.st_mode) == 1)
+		 					{
 		 						listDir(fullPath, 1, permissions, size_greater);
+		 					}
 		 				}
 		 			}
 		 		}
@@ -98,7 +100,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 	fd1 = open(path, O_RDONLY);
 	if(fd1 == -1)
 	{
-		perror("Could not open file!");
+		printf("ERROR\ninvalid file\n");
 		return -1;
 	}
 	lseek(fd1, -1, SEEK_END);
@@ -155,7 +157,9 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 		read(fd1, &sect_offset[i], 4);
 		read(fd1, &sect_size[i], 4);
 		if(sect_size[i] > 1097)
+		{
 			*size_greater_1097 = true;
+		}
 	}
 	if(sect_type_ok == false)
 	{
@@ -189,7 +193,7 @@ void extractSF(const char *path, int section, int line)
 	fd1 = open(path, O_RDONLY);
 	if(fd1 == -1)
 	{
-		perror("Could not open file!");
+		printf("ERROR\ninvalid file\n");
 		return;
 	}
 	bool size_greater_1097 = true;
