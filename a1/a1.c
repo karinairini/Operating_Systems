@@ -114,6 +114,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 		{
 			printf("ERROR\nwrong magic\n");
 		}
+		close(fd1);
 		return -1;
 	}
 	lseek(fd1, -3, SEEK_CUR);
@@ -126,6 +127,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 		{
 			printf("ERROR\nwrong version\n");
 		}
+		close(fd1);
 		return -1;
 	}
 	read(fd1, &nbOfSections, 1);
@@ -135,6 +137,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 		{
 			printf("ERROR\nwrong sect_nr\n");
 		}
+		close(fd1);
 		return -1;
 	}
 	char sect_name[nbOfSections][8];
@@ -167,6 +170,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 		{
 			printf("ERROR\nwrong sect_types\n");
 		}
+		close(fd1);
 		return -1;
 	}
 	if(parse_command == true)
