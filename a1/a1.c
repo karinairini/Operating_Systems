@@ -64,7 +64,9 @@ void listDir(const char *path, int recursive, char *permissions, int size_greate
 		 				if(recursive == 1)
 		 				{
 		 					if(S_ISDIR(statbuf.st_mode) == 1)
+		 					{
 		 						listDir(fullPath, 1, permissions, size_greater);
+		 					}
 		 				}
 		 			}
 		 		}
