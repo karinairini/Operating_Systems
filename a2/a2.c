@@ -199,7 +199,7 @@ int main()
     		sem_close(semaphore1);
     		sem_close(semaphore2);
     		info(END, 4, 0);
-    		exit(4);
+    		exit(4);  
     	}	
     	p5 = fork();
     	if(p5 == 0)
@@ -234,6 +234,6 @@ int main()
    	waitpid(p4, NULL, 0); 		
    	waitpid(p5, NULL, 0);
    	info(END, 1, 0);
-   	exit(1);
+   	exit(1);  
    	return 0;
 }
