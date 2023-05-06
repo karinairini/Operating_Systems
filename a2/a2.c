@@ -8,6 +8,7 @@
 #include "a2_helper.h"
 #include <pthread.h>
 #include <semaphore.h>
+#include <stdbool.h>
 
 typedef struct {
 	int processNumber;
@@ -19,6 +20,9 @@ sem_t semThread4;
 
 sem_t *semaphore1;
 sem_t *semaphore2;
+
+bool endingThread12 = false;
+bool isRunningThread12 = false;
 
 int runningThreads = 0;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
@@ -59,9 +63,10 @@ void *thread_function_P7(void *arg)
 void *thread_function_P2(void *arg)
 {
 	TH_STRUCT *s = (TH_STRUCT *)arg;
+	
 	pthread_mutex_lock(&lock);
 	
-	while(runningThreads >= 6)
+	while(runningThreads >= (s->threadNumber == 12 ? 6 : 5) || endingThread12)
 	{
 		pthread_cond_wait(&cond, &lock);
 	}
@@ -69,14 +74,33 @@ void *thread_function_P2(void *arg)
 	
 	pthread_mutex_unlock(&lock);
 	
-	info(BEGIN, s->processNumber, s->threadNumber);
-	info(END, s->processNumber, s->threadNumber);
-	
-	pthread_mutex_lock(&lock);
-	--runningThreads;
-	pthread_mutex_unlock(&lock);
-	
-	pthread_cond_signal(&cond);
+	if(s->threadNumber != 12)
+	{
+		info(BEGIN, s->processNumber, s->threadNumber);
+		pthread_mutex_lock(&lock);
+		
+		info(END, s->processNumber, s->threadNumber);
+		--runningThreads;
+		
+		pthread_mutex_unlock(&lock);
+		pthread_cond_signal(&cond);
+	}
+	else
+	{
+		pthread_mutex_lock(&lock);
+		
+		endingThread12 = true;
+		info(BEGIN, s->processNumber, s->threadNumber);
+		endingThread12 = false;
+		--runningThreads;
+		
+		pthread_mutex_unlock(&lock);
+		pthread_cond_signal(&cond);
+	}
+	if(s->threadNumber == 12)
+	{
+		info(END, s->processNumber, s->threadNumber);
+	}
 	return NULL;
 }
 
@@ -199,7 +223,7 @@ int main()
     		sem_close(semaphore1);
     		sem_close(semaphore2);
     		info(END, 4, 0);
-    		exit(4);  
+    		exit(4);
     	}	
     	p5 = fork();
     	if(p5 == 0)
@@ -234,6 +258,6 @@ int main()
    	waitpid(p4, NULL, 0); 		
    	waitpid(p5, NULL, 0);
    	info(END, 1, 0);
-   	exit(1);  
+   	exit(1);
    	return 0;
 }
