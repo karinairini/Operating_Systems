@@ -15,18 +15,18 @@ typedef struct {
 	int threadNumber;
 } TH_STRUCT;
 
+//semafoare anonime pentru sincronizarea thread-urilor 3, 4 din procesul 7
 sem_t semThread3;
 sem_t semThread4;
 
+//semafoare cu nume pentru thread-urile 3, 4 din procesul 4 si thread-ul 1 din procesul 7
 sem_t *semaphore1;
 sem_t *semaphore2;
 
-bool endingThread12 = false;
-bool isRunningThread12 = false;
-
-int runningThreads = 0;
+int runningThreads = 0, foundThread12 = 0, endedThread12 = 0, threadNumber12 = 12;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
+sem_t semaphoreP2;
 
 void *thread_function_P7(void *arg)
 {
@@ -38,69 +38,85 @@ void *thread_function_P7(void *arg)
 	}
 	if(s->threadNumber == 1)
 	{
-		sem_wait(semaphore2);
+		sem_wait(semaphore2); // se asteapta terminarea thread-ului 3 din procesul 4
 		info(BEGIN, s->processNumber, s->threadNumber);
 		info(END, s->processNumber, s->threadNumber);
-		sem_post(semaphore1);
+		sem_post(semaphore1); // se da drumul thread-ului 4 din procesul 4
 	}
+	//thread-ul 4 trebuie sa inceapa inaintea thread-ului 3 si sa se incheie dupa terminarea acestuia
 	if(s->threadNumber == 3)
 	{
-		sem_wait(&semThread3);
+		sem_wait(&semThread3); // se asteapta inceperea thread-ului 3
 		info(BEGIN, s->processNumber, s->threadNumber);
 		info(END, s->processNumber, s->threadNumber);
-		sem_post(&semThread4);
+		sem_post(&semThread4); // se continua executia thread-ului 4
 	}
 	if(s->threadNumber == 4)
 	{
-		info(BEGIN, s->processNumber, s->threadNumber);
-		sem_post(&semThread3);
-		sem_wait(&semThread4);
+		info(BEGIN, s->processNumber, s->threadNumber); // incepe thread-ul 4
+		sem_post(&semThread3); // se da drumul thread-ului 3
+		sem_wait(&semThread4); // se asteapta terminarea thread-ului 3, punand in asteptare thread-ul 4
 		info(END, s->processNumber, s->threadNumber);
 	}
 	return NULL;
 }
 
+// cel mult 6 thread-uri din procesul 2 pot rula simultan
+// thread-ul 12 nu are voie sa se incheie decat in timp ce 6 thread-uri, inclusiv thread-ul 12, ruleaza
 void *thread_function_P2(void *arg)
 {
 	TH_STRUCT *s = (TH_STRUCT *)arg;
 	
+	// se protejeaza accesul la variabila runningThreads prin intermediul lacatului
+	// runningThreads reprezinta numarul de thread-uri care ruleaza la un moment dat
 	pthread_mutex_lock(&lock);
 	
-	while(runningThreads >= (s->threadNumber == 12 ? 6 : 5) || endingThread12)
+	// daca sunt deja 6 thread-uri care ruleaza, celelalte se pun in asteptare
+	while(runningThreads >= 6)
 	{
 		pthread_cond_wait(&cond, &lock);
 	}
-	++runningThreads;
 	
-	pthread_mutex_unlock(&lock);
-	
-	if(s->threadNumber != 12)
-	{
-		info(BEGIN, s->processNumber, s->threadNumber);
-		pthread_mutex_lock(&lock);
-		
-		info(END, s->processNumber, s->threadNumber);
-		--runningThreads;
-		
-		pthread_mutex_unlock(&lock);
-		pthread_cond_signal(&cond);
-	}
-	else
-	{
-		pthread_mutex_lock(&lock);
-		
-		endingThread12 = true;
-		info(BEGIN, s->processNumber, s->threadNumber);
-		endingThread12 = false;
-		--runningThreads;
-		
-		pthread_mutex_unlock(&lock);
-		pthread_cond_signal(&cond);
-	}
-	if(s->threadNumber == 12)
-	{
-		info(END, s->processNumber, s->threadNumber);
-	}
+    	++runningThreads;
+    	pthread_mutex_unlock(&lock);
+
+	// daca thread-ul este altul decat cel cu numarul 12, i se incepe executia
+	// astfel se marcheaza ca s-a dat de el, pentru a-l putea gestiona conform cerintei
+    	if(s->threadNumber != threadNumber12)
+    	{
+       		info(BEGIN, s->processNumber, s->threadNumber);
+    	} 
+    	else
+        {
+        	foundThread12 = 1;
+        }
+        
+        // se foloseste un semafor pentru a putea intra doar un singur thread in regiunea critica
+    	sem_wait(&semaphoreP2);
+    
+    	if(s->threadNumber != threadNumber12)
+    	{
+    		if(runningThreads == 6) // daca s-a atins numarul maxim de thread-uri care pot rula simultan
+    		{
+    			if(foundThread12 == 1 && endedThread12 == 0) // daca s-a dat de thread-ul cu numarul 12 si acesta nu a fost incheiat
+    			{
+        			info(BEGIN, s->processNumber, threadNumber12); // se incepe executia acestuia
+        			info(END, s->processNumber, threadNumber12);  // se incheie executia acestuia cu conditia ca 6 thread-uri inclusiv el sa ruleze simultan
+        			pthread_cond_signal(&cond); // se trezeste urmatorul thread in asteptare
+        			endedThread12 = 1; // se seteaza variabila endedThread12 pentru a stii ca s-a procesat
+    			}
+    		}
+        	info(END, s->processNumber, s->threadNumber); // se incheie executia celorlalte thread-uri
+        	
+        	// in regiunea critica se scade numarul thread-urilor care ruleaza
+        	pthread_mutex_lock(&lock);
+        	--runningThreads;
+        	pthread_mutex_unlock(&lock);
+        	
+    		pthread_cond_signal(&cond); // se trezeste urmatorul thread in asteptare
+    	}
+    	
+    	sem_post(&semaphoreP2);
 	return NULL;
 }
 
@@ -112,15 +128,17 @@ void *thread_function_P4(void *arg)
 		info(BEGIN, s->processNumber, s->threadNumber);
 		info(END, s->processNumber, s->threadNumber);
 	}
+	// thread-ul 3 din procesul 4 trebuie sa se incheie inainte ca thread-ul 1 din procesul 7 sa porneasca
 	if(s->threadNumber == 3)
 	{
 		info(BEGIN, s->processNumber, s->threadNumber);
-		info(END, s->processNumber, s->threadNumber);
-		sem_post(semaphore2);
+		info(END, s->processNumber, s->threadNumber); // se incheie thread-ul 3 din procesul 4 
+		sem_post(semaphore2); // se porneste thread-ul 1 din procesul 7
 	}
+	// thread-ul 4 din procesul 4 nu poate incepe decat dupa ce thread-ul 1 din procesul 7 s-a terminat
 	if(s->threadNumber == 4)
 	{
-		sem_wait(semaphore1);
+		sem_wait(semaphore1); // se asteapta terminarea executiei thread-ului 1 din procesul 7
 		info(BEGIN, s->processNumber, s->threadNumber);
 		info(END, s->processNumber, s->threadNumber);
 	}
@@ -131,6 +149,7 @@ int main()
 {
 	init();
     	info(BEGIN, 1, 0);
+    	// se initializeaza semafoarele cu 0, pentru a permite intrarea in regiunea critica a mai multor procese, la un moment dat
     	sem_unlink("/semaphore1");
     	semaphore1 = sem_open("/semaphore1", O_CREAT, 0644, 0); 
     	if(semaphore1 == NULL) 
@@ -144,6 +163,11 @@ int main()
     	{
 		perror("Could not aquire the semaphore");
 		return -2;
+    	}
+    	if(sem_init(&semaphoreP2, 0, 1) != 0) 
+    	{
+        	perror("Could not init the semaphore");
+        	return -2;
     	}
     	pid_t p2 = -1, p3 = -1, p4 = -1, p5 = -1, p6 = -1, p7 = -1, p8 = -1; 
     	p2 = fork();
@@ -163,6 +187,7 @@ int main()
     		{
     			pthread_join(tids[i], NULL);
     		}
+    		sem_destroy(&semaphoreP2);
     		p3 = fork();
     		if(p3 == 0)
     		{
