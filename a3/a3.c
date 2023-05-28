@@ -12,32 +12,39 @@
 #define RESP_PIPE "RESP_PIPE_53721"
 #define REQ_PIPE "REQ_PIPE_53721"
 
-void parseSF(int fd)
+int parseSF(char *path, int section_no)
 {
-	lseek(fd, -1, SEEK_END);
+	int fd1 = -1;
+	fd1 = open(path, O_RDONLY);
+	if(fd1 == -1)
+	{
+		printf("ERROR\ninvalid file\n");
+		return -1;
+	}
+	lseek(fd1, -1, SEEK_END);
 	char magic[2];
 	int headerSize = 0, version = 0, nbOfSections = 0;
-	read(fd, magic, 1);
+	read(fd1, magic, 1);
 	magic[1]='\0';
 	if(strncmp(magic, "L", 1) != 0)
 	{
-		close(fd);
-		return;
+		close(fd1);
+		return -1;
 	}
-	lseek(fd, -3, SEEK_CUR);
-	read(fd, &headerSize, 2);
-	lseek(fd, -headerSize, SEEK_END);
-	read(fd, &version, 2);
+	lseek(fd1, -3, SEEK_CUR);
+	read(fd1, &headerSize, 2);
+	lseek(fd1, -headerSize, SEEK_END);
+	read(fd1, &version, 2);
 	if(version < 36 || version > 102)
 	{
-		close(fd);
-		return;
+		close(fd1);
+		return -1;
 	}
-	read(fd, &nbOfSections, 1);
+	read(fd1, &nbOfSections, 1);
 	if(nbOfSections < 5 || nbOfSections > 16)
 	{
-		close(fd);
-		return;
+		close(fd1);
+		return -1;
 	}
 	char sect_name[nbOfSections][8];
 	int sect_type[nbOfSections], sect_offset[nbOfSections], sect_size[nbOfSections];
@@ -49,27 +56,32 @@ void parseSF(int fd)
 	for(int i = 0; i < nbOfSections; i++)
 	{	
 		char name[8];
-		read(fd, name, 7);
+		read(fd1, name, 7);
 		sprintf(sect_name[i], "%s", name);
-		read(fd, &sect_type[i], 1);
+		read(fd1, &sect_type[i], 1);
 		if(sect_type[i] != 17 && sect_type[i] != 29 && sect_type[i] != 98 && sect_type[i] != 43 && sect_type[i] != 89 && sect_type_ok == true)
 		{	
 			sect_type_ok = false;
 		}
-		read(fd, &sect_offset[i], 4);
-		read(fd, &sect_size[i], 4);
+		read(fd1, &sect_offset[i], 4);
+		if(i == section_no)
+		{
+			return sect_offset[i];
+		}
+		read(fd1, &sect_size[i], 4);
 	}
 	if(sect_type_ok == false)
 	{
-		close(fd);
-		return;
+		close(fd1);
+		return -1;
 	}
-	close(fd);
+	close(fd1);
+	return 0;
 }
 
 int main()
 {
-	char *sharedData = NULL, *fileData = NULL, *file_name;
+	char *sharedData = NULL, *fileData = NULL;
 	unsigned int size;
 	int fd1 = -1, fd2 = -1, fd3 = -1;
 	if(mkfifo(RESP_PIPE, 0600) != 0)
@@ -90,7 +102,7 @@ int main()
 		return 1;
 	}
 	unsigned int string_length = 5;
-	char start_message[5] = "START", success_message[7] = "SUCCESS", error_message[5] = "ERROR", value_message[5] = "VALUE";
+	char start_message[5] = "START", success_message[7] = "SUCCESS", error_message[5] = "ERROR", value_message[5] = "VALUE", file_name[250];
 	write(fd2, &string_length, 1);
 	write(fd2, start_message, string_length);
 	printf("SUCCESS\n");
@@ -176,7 +188,6 @@ int main()
 		{
 			unsigned int file_size;
 			read(fd1, &file_size, 1); 
-            		file_name = (char*)malloc((file_size + 1)*sizeof(char));
             		read(fd1, file_name, file_size);
             		file_name[file_size] = '\0';
             		fd3 = open(file_name, O_RDONLY); 
@@ -188,7 +199,6 @@ int main()
                 		string_length = 5;
                 		write(fd2, &string_length, 1);
                 		write(fd2, error_message, string_length);
-                		free(file_name);
                 		close(fd3);
                 		continue;
             		}
@@ -203,7 +213,6 @@ int main()
                			string_length = 5;
                 		write(fd2, &string_length, 1);
                 		write(fd2, error_message, string_length); 
-                		free(file_name);
                 		close(fd3);
                 		continue;
             		}
@@ -213,18 +222,19 @@ int main()
            		string_length = 7;
             		write(fd2, &string_length, 1);
             		write(fd2, success_message, string_length); 
-            		free(file_name);
             		close(fd3);
 		}
 		if(strncmp("READ_FROM_FILE_OFFSET", request_message, 21) == 0)
 		{
     			unsigned int no_of_bytes, offset;
-    			read(fd1, &no_of_bytes, sizeof(unsigned int));
     			read(fd1, &offset, sizeof(unsigned int));
+    			read(fd1, &no_of_bytes, sizeof(unsigned int));
+    			int ok = 0;
     			if(sharedData != NULL && fileData != NULL)
    			{
         			if(offset + no_of_bytes <= size)
         			{
+        				ok = 1;
             				memcpy(sharedData, fileData + offset, no_of_bytes);
             				string_length = 21;
             				write(fd2, &string_length, 1);
@@ -232,34 +242,54 @@ int main()
             				string_length = 7;
             				write(fd2, &string_length, 1);
             				write(fd2, success_message, string_length);
-            				write(fd2, &no_of_bytes, sizeof(unsigned int));
+            				write(fd2, &no_of_bytes, 1);
             				write(fd2, sharedData, no_of_bytes);
-            				continue;
         			}
     			}
-   		 	string_length = 21;
-    			write(fd2, &string_length, 1);
-    			write(fd2, request_message, string_length);
-    			string_length = 5;
-    			write(fd2, &string_length, 1);
-    			write(fd2, error_message, string_length);
+    			if(ok < 1)
+   		 	{
+   		 		string_length = 21;
+    				write(fd2, &string_length, 1);
+    				write(fd2, request_message, string_length);
+    				string_length = 5;
+    				write(fd2, &string_length, 1);
+    				write(fd2, error_message, string_length);
+    			}
 		}
 		if(strncmp("READ_FROM_FILE_SECTION", request_message, 22) == 0)
 		{   
-            		string_length = 22;
-            		write(fd2, &string_length, 1);
-            		write(fd2, request_message, string_length);
-            		string_length = 5;
-            		write(fd2, &string_length, 1);
-            		write(fd2, error_message, string_length);
-            		return 0;
-            		string_length = 7;
-            		write(fd2, &string_length, 1);
-           		write(fd2, success_message, string_length);
+			unsigned int section_no, offset, no_of_bytes;
+			read(fd1, &section_no, sizeof(unsigned int));
+			read(fd1, &offset, sizeof(unsigned int));
+    			read(fd1, &no_of_bytes, sizeof(unsigned int));
+    			int sect_offset = parseSF(file_name, section_no - 1);
+    			if(sect_offset > 0)
+    			{
+    				memcpy(sharedData, fileData + offset + sect_offset, no_of_bytes);
+            			string_length = 22;
+            			write(fd2, &string_length, 1);
+            			write(fd2, request_message, string_length);
+            			string_length = 7;
+            			write(fd2, &string_length, 1);
+           			write(fd2, success_message, string_length);
+            			write(fd2, &no_of_bytes, 1);
+            			write(fd2, sharedData, no_of_bytes);
+            		}
+            		else
+            		{
+            			string_length = 22;
+            			write(fd2, &string_length, 1);
+            			write(fd2, request_message, string_length);
+            			string_length = 5;
+            			write(fd2, &string_length, 1);
+            			write(fd2, error_message, string_length);
+            		}
         	}
         	if(strncmp("READ_FROM_LOGICAL_SPACE_OFFSET", request_message, 30) == 0)
         	{
-        		parseSF(fd3);
+        		unsigned int logical_offset, no_of_bytes;
+			read(fd1, &logical_offset, sizeof(unsigned int));
+			read(fd1, &no_of_bytes, sizeof(unsigned int));
             		string_length = 30;
             		write(fd2, &string_length, 1);
             		write(fd2, request_message, string_length);
@@ -267,13 +297,17 @@ int main()
             		write(fd2, &string_length, 1);
             		write(fd2, error_message, string_length);
             		close(fd3);
-            		return 0;
            		string_length = 7;
             		write(fd1, &string_length, 1);
             		write(fd1, success_message, string_length);
+            		close(fd3);
         	}
 		if(strncmp("EXIT", request_message, 4) == 0)
 		{
+			shmdt(sharedData);
+			munmap(fileData, size);
+    			sharedData = NULL;
+    			fileData = NULL;
 			close(fd1);
 			close(fd2);
 			unlink(RESP_PIPE);
@@ -282,7 +316,6 @@ int main()
 		}
 	}
 	shmdt(sharedData);
-	shmdt(fileData);
 	munmap(fileData, size);
     	sharedData = NULL;
     	fileData = NULL;

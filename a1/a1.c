@@ -160,6 +160,7 @@ int parseSF(const char *path, bool *size_greater_1097, bool parse_command, int *
 			sect_type_ok = false;
 		}
 		read(fd1, &sect_offset[i], 4);
+		printf("off: %d\n", sect_offset[i]);
 		read(fd1, &sect_size[i], 4);
 		if(sect_size[i] > 1097)
 		{
