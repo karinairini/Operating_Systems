@@ -1,6 +1,5 @@
-# Sisteme_de_Operare_2023
-Acest repository cuprinde implementarea celor trei teme relevante pentru cursul de Sisteme de Operare din semestrul al doilea al anului al doilea la Universitatea Tehnică 
-din Cluj-Napoca. În plus, sunt incluse și evaluările corespunzătoare acestor teme.
+# Operating Systems
 
-Aici veți găsi soluțiile și proiectele asociate fiecărei teme de studiu, oferind o perspectivă practică asupra noțiunilor abordate în cadrul cursului de 'Sisteme de Operare'. 
-Această colecție de materiale reflectă efortul și înțelegerea dobândite în cadrul acestor teme.
+This repository incorporates the implementation of the three assignments relevant to the 'Operating Systems' course in the second semester of the second year at the Technical University of Cluj-Napoca. Additionally, the corresponding evaluations for these assignments are included.
+
+Here, you will find the solutions and projects associated with each study assignment, offering a practical insight into the concepts covered within the course. This collection of materials reflects the effort and comprehension attained throughout these assignments.
